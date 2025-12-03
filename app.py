@@ -129,6 +129,18 @@ if st.button("🔄 Procesar Reportes"):
     st.dataframe(df_resumen, use_container_width=True)
 
     # ----------------------------------------------------
+    # REPORTE SEMANAL POR SUPERVISOR (DETALLADO)
+    # ----------------------------------------------------
+    st.header("👥 Reporte Semanal por Supervisor (con detalle)")
+    st.dataframe(resultados["semanal_supervisor_full"], use_container_width=True)
+
+    # ----------------------------------------------------
+    # RESUMEN DEL PERIODO POR SUPERVISOR
+    # ----------------------------------------------------
+    st.header("⭐ Resumen del Periodo por Supervisor")
+    st.dataframe(resultados["resumen_supervisor"], use_container_width=True)
+
+    # ----------------------------------------------------
     # DESCARGA
     # ----------------------------------------------------
     st.header("📥 Descargar Excel Consolidado")
