@@ -15,7 +15,9 @@ y la app consolidará **Ventas**, **Performance** y **Auditorías**, incluyendo:
 
 - Reporte Diario  
 - Reporte Semanal (semana primero)  
+- Reporte Semanal por Supervisor (con detalle de agentes)  
 - Resumen Total  
+- Resumen por Supervisor  
 - Cruce con plantilla de agentes  
 """)
 
@@ -45,7 +47,7 @@ colf1, colf2 = st.columns(2)
 date_from = colf1.date_input("Desde:")
 date_to = colf2.date_input("Hasta:")
 
-if date_from > date_to:
+if date_from and date_to and date_from > date_to:
     st.error("❌ La fecha inicial no puede ser mayor que la final.")
     st.stop()
 
@@ -113,6 +115,8 @@ if st.button("🔄 Procesar Reportes"):
     df_diario = resultados["diario"]
     df_semanal = resultados["semanal"]
     df_resumen = resultados["resumen"]
+    df_sup_semanal = resultados["semanal_supervisor_full"]
+    df_sup_resumen = resultados["resumen_supervisor"]
 
     st.success("✔ Reportes procesados correctamente.")
 
@@ -122,41 +126,43 @@ if st.button("🔄 Procesar Reportes"):
     st.header("📅 Reporte Diario")
     st.dataframe(df_diario, use_container_width=True)
 
-    st.header("📆 Reporte Semanal")
+    st.header("📆 Reporte Semanal (por agente)")
     st.dataframe(df_semanal, use_container_width=True)
 
-    st.header("📊 Resumen Total")
+    st.header("👥 Reporte Semanal por Supervisor (con detalle de agentes)")
+    st.dataframe(df_sup_semanal, use_container_width=True)
+
+    st.header("📊 Resumen Total por Agente")
     st.dataframe(df_resumen, use_container_width=True)
 
-    # ----------------------------------------------------
-    # REPORTE SEMANAL POR SUPERVISOR (DETALLADO)
-    # ----------------------------------------------------
-    st.header("👥 Reporte Semanal por Supervisor (con detalle)")
-    st.dataframe(resultados["semanal_supervisor_full"], use_container_width=True)
-
-    # ----------------------------------------------------
-    # RESUMEN DEL PERIODO POR SUPERVISOR
-    # ----------------------------------------------------
     st.header("⭐ Resumen del Periodo por Supervisor")
-    st.dataframe(resultados["resumen_supervisor"], use_container_width=True)
+    st.dataframe(df_sup_resumen, use_container_width=True)
 
     # ----------------------------------------------------
     # DESCARGA
     # ----------------------------------------------------
     st.header("📥 Descargar Excel Consolidado")
 
-    def to_excel(diario, semanal, resumen):
+    def to_excel(
+        diario, semanal, resumen,
+        semanal_sup, resumen_sup
+    ):
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine="xlsxwriter")
 
         diario.to_excel(writer, sheet_name="Diario", index=False)
-        semanal.to_excel(writer, sheet_name="Semanal", index=False)
-        resumen.to_excel(writer, sheet_name="Resumen", index=False)
+        semanal.to_excel(writer, sheet_name="Semanal_Agente", index=False)
+        resumen.to_excel(writer, sheet_name="Resumen_Agente", index=False)
+        semanal_sup.to_excel(writer, sheet_name="Semanal_Supervisor", index=False)
+        resumen_sup.to_excel(writer, sheet_name="Resumen_Supervisor", index=False)
 
         writer.close()
         return output.getvalue()
 
-    excel_bytes = to_excel(df_diario, df_semanal, df_resumen)
+    excel_bytes = to_excel(
+        df_diario, df_semanal, df_resumen,
+        df_sup_semanal, df_sup_resumen
+    )
 
     st.download_button(
         "⬇ Descargar Excel Consolidado",
@@ -167,3 +173,4 @@ if st.button("🔄 Procesar Reportes"):
 
 else:
     st.info("Sube los archivos, selecciona rango de fechas y presiona **Procesar Reportes**.")
+
