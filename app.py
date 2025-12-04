@@ -11,15 +11,11 @@ st.title("🟦 Consolidador CMI – Aeropuerto Cabify")
 
 st.markdown("""
 Sube los reportes correspondientes, selecciona el rango de fechas
-y la app consolidará **Ventas**, **Performance** y **Auditorías**, además del
-**Resumen Global por Supervisor**.
+y la app consolidará **Ventas**, **Performance** y **Auditorías**, incluyendo:
 
-Incluye:
-
-- 📅 Reporte Diario  
-- 📆 Reporte Semanal (por agente)  
-- 📊 Resumen Total del Periodo  
-- ⭐ Consolidado por Supervisor  
+- Reporte Diario  
+- Reporte Semanal  
+- **Resumen del Periodo (Supervisor + Agentes)**  
 """)
 
 # ------------------------------------------------------------
@@ -53,6 +49,7 @@ if date_from > date_to:
     st.stop()
 
 st.divider()
+
 # ------------------------------------------------------------
 # BOTÓN DE PROCESAR
 # ------------------------------------------------------------
@@ -117,16 +114,17 @@ if st.button("🔄 Procesar Reportes"):
     df_resumen = resultados["resumen"]
 
     st.success("✔ Reportes procesados correctamente.")
+
     # ----------------------------------------------------
     # MOSTRAR RESULTADOS
     # ----------------------------------------------------
     st.header("📅 Reporte Diario")
     st.dataframe(df_diario, use_container_width=True)
 
-    st.header("📆 Reporte Semanal (Agentes)")
+    st.header("📆 Reporte Semanal")
     st.dataframe(df_semanal, use_container_width=True)
 
-    st.header("⭐ Resumen Total del Periodo (Incluye Supervisores + Agentes)")
+    st.header("📊 Resumen del Periodo (Supervisores + Agentes)")
     st.dataframe(df_resumen, use_container_width=True)
 
     # ----------------------------------------------------
@@ -138,26 +136,9 @@ if st.button("🔄 Procesar Reportes"):
         output = BytesIO()
         writer = pd.ExcelWriter(output, engine="xlsxwriter")
 
-        # Escribir hojas
         diario.to_excel(writer, sheet_name="Diario", index=False)
         semanal.to_excel(writer, sheet_name="Semanal", index=False)
         resumen.to_excel(writer, sheet_name="Resumen", index=False)
-
-        # ==========================================================
-        # FORMATO: Colorear filas TOTAL SUPERVISOR con #D6CCF8
-        # ==========================================================
-        workbook = writer.book
-        ws = writer.sheets["Resumen"]
-
-        format_super = workbook.add_format({
-            "bg_color": "#D6CCF8",
-            "bold": True
-        })
-
-        # Buscar filas con "TOTAL SUPERVISOR"
-        for row_idx in range(1, len(resumen) + 1):
-            if str(resumen.loc[row_idx - 1, "Tipo Registro"]).upper() == "TOTAL SUPERVISOR":
-                ws.set_row(row_idx, cell_format=format_super)
 
         writer.close()
         return output.getvalue()
@@ -173,6 +154,5 @@ if st.button("🔄 Procesar Reportes"):
 
 else:
     st.info("Sube los archivos, selecciona rango de fechas y presiona **Procesar Reportes**.")
-
 
 
