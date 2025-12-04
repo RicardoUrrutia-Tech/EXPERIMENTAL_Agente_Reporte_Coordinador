@@ -1,6 +1,6 @@
 # ===============================================================
-#   ⬛⬛⬛   PROCESSOR.PY — VERSION FINAL INTEGRADA 2025
-#   Unifica resumen por agente + supervisor en un solo reporte
+#   ⬛⬛⬛   PROCESSOR.PY — VERSION FINAL ESTABLE 2025
+#   Resumen unificado por supervisor + agentes
 # ===============================================================
 
 import pandas as pd
@@ -79,7 +79,7 @@ def filtrar_rango(df, col, d_from, d_to):
 
 
 # =========================================================
-# PROCESO DE VENTAS
+# PROCESO VENTAS
 # =========================================================
 
 def process_ventas(df, d_from, d_to):
@@ -135,7 +135,6 @@ def process_performance(df, d_from, d_to):
 
     df["fecha"] = df["Fecha de Referencia"].apply(to_date)
     df = filtrar_rango(df, "fecha", d_from, d_to)
-
     df["agente"] = df["Assignee Email"]
 
     df["Q_Encuestas"] = df.apply(
@@ -147,11 +146,10 @@ def process_performance(df, d_from, d_to):
     df["Q_Tickets_Resueltos"] = df["Status"].apply(lambda x: 1 if str(x).lower().strip() == "solved" else 0)
     df["Q_Reopen"] = pd.to_numeric(df.get("Reopen", 0), errors="coerce").fillna(0)
 
-    conv = ["CSAT", "NPS Score", "Firt (h)", "Furt (h)", "% Firt", "% Furt"]
-    for c in conv:
+    for c in ["CSAT", "NPS Score", "Firt (h)", "Furt (h)", "% Firt", "% Furt"]:
         df[c] = pd.to_numeric(df.get(c, np.nan), errors="coerce")
 
-    out = df.groupby(["agente", "fecha"], as_index=False).agg({
+    out = df.groupby(["agente","fecha"], as_index=False).agg({
         "Q_Encuestas":"sum",
         "CSAT":"mean",
         "NPS Score":"mean",
@@ -190,7 +188,7 @@ def process_auditorias(df, d_from, d_to):
     df["Q_Auditorias"] = 1
     df["Nota_Auditorias"] = pd.to_numeric(df["Total Audit Score"], errors="coerce")
 
-    out = df.groupby(["agente", "fecha"], as_index=False).agg({
+    out = df.groupby(["agente","fecha"], as_index=False).agg({
         "Q_Auditorias":"sum",
         "Nota_Auditorias":"mean"
     })
@@ -203,7 +201,7 @@ def process_auditorias(df, d_from, d_to):
 
 
 # =========================================================
-# MERGE CON LISTADO DE AGENTES
+# MERGE AGENTES
 # =========================================================
 
 def merge_agentes(df, agentes_df):
@@ -211,17 +209,27 @@ def merge_agentes(df, agentes_df):
         return df
 
     agentes_df = normalize_headers(agentes_df.copy())
-    agentes_df["Email Cabify"] = agentes_df["Email Cabify"].str.lower().str.strip()
-    df["agente"] = df["agente"].str.lower().str.strip()
 
-    df = df.merge(agentes_df, left_on="agente", right_on="Email Cabify", how="left")
+    agentes_df["Email Cabify"] = (
+        agentes_df["Email Cabify"].astype(str).str.lower().str.strip()
+    )
+    df["agente"] = df["agente"].astype(str).str.lower().str.strip()
+
+    df = df.merge(
+        agentes_df,
+        left_on="agente",
+        right_on="Email Cabify",
+        how="left",
+    )
+
     df = df[df["Email Cabify"].notna()]
     df = df.drop(columns=["agente"])
+
     return df
 
 
 # =========================================================
-# MATRIZ DIARIA COMPLETA
+# DIARIO
 # =========================================================
 
 def build_daily(df_list, agentes_df):
@@ -236,14 +244,13 @@ def build_daily(df_list, agentes_df):
     merged = merge_agentes(merged, agentes_df)
     merged = merged.sort_values(["fecha","Email Cabify"])
 
-    # KPIs enteros
-    int_cols = ["Q_Encuestas","Q_Tickets","Q_Tickets_Resueltos","Q_Reopen","Q_Auditorias",
-                "Ventas_Totales","Ventas_Compartidas","Ventas_Exclusivas"]
+    int_cols = ["Q_Encuestas","Q_Tickets","Q_Tickets_Resueltos","Q_Reopen",
+                "Q_Auditorias","Ventas_Totales","Ventas_Compartidas","Ventas_Exclusivas"]
+
     for c in int_cols:
         if c in merged.columns:
             merged[c] = merged[c].fillna(0).astype(int)
 
-    # Promedios
     avg_cols = ["NPS","CSAT","FIRT","%FIRT","FURT","%FURT","Nota_Auditorias"]
     for c in avg_cols:
         if c in merged.columns:
@@ -261,7 +268,7 @@ def build_daily(df_list, agentes_df):
 
 
 # =========================================================
-# MATRIZ SEMANAL (label corregido)
+# SEMANAL
 # =========================================================
 
 def build_weekly(df_daily):
@@ -279,8 +286,8 @@ def build_weekly(df_daily):
     fecha_min = df["fecha"].min()
     inicio_sem = fecha_min - timedelta(days=fecha_min.weekday())
 
-    def nombre_semana(f):
-        delta = (f - inicio_sem).days
+    def nombre_semana(fecha):
+        delta = (fecha - inicio_sem).days
         s = delta // 7
         ini = inicio_sem + timedelta(days=s*7)
         fin = ini + timedelta(days=6)
@@ -322,19 +329,11 @@ def build_weekly(df_daily):
     for c in ["NPS","CSAT","FIRT","%FIRT","FURT","%FURT","Nota_Auditorias"]:
         weekly[c] = weekly[c].round(2)
 
-    order = [
-        "Semana","Nombre","Primer Apellido","Segundo Apellido",
-        "Email Cabify","Tipo contrato","Ingreso","Supervisor","Correo Supervisor"
-    ] + [c for c in weekly.columns if c not in [
-        "Semana","Nombre","Primer Apellido","Segundo Apellido",
-        "Email Cabify","Tipo contrato","Ingreso","Supervisor","Correo Supervisor"
-    ]]
-
-    return weekly[order]
+    return weekly
 
 
 # =========================================================
-# RESUMEN UNIFICADO (AGENTES + SUPERVISOR)
+# RESUMEN UNIFICADO — SUPERVISORES + AGENTES
 # =========================================================
 
 def build_summary(df_daily):
@@ -343,7 +342,7 @@ def build_summary(df_daily):
 
     df = df_daily.copy()
 
-    # SUMAS
+    # SUMATORIAS POR AGENTE
     agg_sum = {
         "Q_Encuestas":"sum",
         "Q_Tickets":"sum",
@@ -357,6 +356,7 @@ def build_summary(df_daily):
 
     resumen_ag = df.groupby("Email Cabify", as_index=False).agg(agg_sum)
 
+    # MERGE INFO AGENTE
     info_cols = [
         "Email Cabify","Nombre","Primer Apellido","Segundo Apellido",
         "Tipo contrato","Ingreso","Supervisor","Correo Supervisor"
@@ -364,7 +364,7 @@ def build_summary(df_daily):
 
     resumen_ag = resumen_ag.merge(df[info_cols].drop_duplicates(), on="Email Cabify", how="left")
 
-    # PROMEDIOS PONDERADOS
+    # PROMEDIOS PONDERADOS POR AGENTE
     def weighted(values, weights):
         if weights.sum() == 0:
             return np.nan
@@ -374,6 +374,7 @@ def build_summary(df_daily):
 
     for ag in resumen_ag["Email Cabify"]:
         temp = df[df["Email Cabify"] == ag]
+
         registros.append({
             "Email Cabify": ag,
             "NPS": weighted(temp["NPS"], temp["Q_Encuestas"]),
@@ -385,43 +386,47 @@ def build_summary(df_daily):
             "Nota_Auditorias": weighted(temp["Nota_Auditorias"], temp["Q_Auditorias"]),
         })
 
-    dfw = pd.DataFrame(registros)
-    resumen_ag = resumen_ag.merge(dfw, on="Email Cabify", how="left")
+    resumen_ag = resumen_ag.merge(pd.DataFrame(registros), on="Email Cabify", how="left")
 
-    # Redondeos
-    avg_cols = ["NPS","CSAT","FIRT","%FIRT","FURT","%FURT","Nota_Auditorias"]
-    for c in avg_cols:
+    for c in ["NPS","CSAT","FIRT","%FIRT","FURT","%FURT","Nota_Auditorias"]:
         resumen_ag[c] = resumen_ag[c].round(2)
 
-    # =====================================================
-    # RESUMEN POR SUPERVISOR
-    # =====================================================
+    # =========================================================
+    # SUPERVISORES
+    # =========================================================
 
-    supervisors = resumen_ag["Supervisor"].unique().tolist()
+    supervisores = resumen_ag["Supervisor"].unique().tolist()
     registros_sup = []
 
-    for sup in supervisors:
-        temp = resumen_ag[resumen_ag["Supervisor"] == sup]
+    def w(values, weights):
+        if weights.sum() == 0:
+            return np.nan
+        return (values * weights).sum() / weights.sum()
 
-        def w(vals, wts):
-            if wts.sum() == 0:
-                return np.nan
-            return (vals * wts).sum() / wts.sum()
+    for sup in supervisores:
+        temp = resumen_ag[resumen_ag["Supervisor"] == sup]
 
         registros_sup.append({
             "Supervisor": sup,
             "Tipo Registro": "TOTAL SUPERVISOR",
-            "Nombre":"", "Primer Apellido":"", "Segundo Apellido":"",
-            "Email Cabify":"", "Tipo contrato":"", "Ingreso":"",
+            "Nombre":"",
+            "Primer Apellido":"",
+            "Segundo Apellido":"",
+            "Email Cabify":"",
+            "Tipo contrato":"",
+            "Ingreso":"",
             "Correo Supervisor": temp["Correo Supervisor"].iloc[0],
+
             "Q_Encuestas": temp["Q_Encuestas"].sum(),
             "Q_Tickets": temp["Q_Tickets"].sum(),
             "Q_Tickets_Resueltos": temp["Q_Tickets_Resueltos"].sum(),
             "Q_Reopen": temp["Q_Reopen"].sum(),
             "Q_Auditorias": temp["Q_Auditorias"].sum(),
+
             "Ventas_Totales": temp["Ventas_Totales"].sum(),
             "Ventas_Compartidas": temp["Ventas_Compartidas"].sum(),
             "Ventas_Exclusivas": temp["Ventas_Exclusivas"].sum(),
+
             "NPS": w(temp["NPS"], temp["Q_Encuestas"]),
             "CSAT": w(temp["CSAT"], temp["Q_Encuestas"]),
             "FIRT": w(temp["FIRT"], temp["Q_Tickets_Resueltos"]),
@@ -433,14 +438,13 @@ def build_summary(df_daily):
 
     df_sup = pd.DataFrame(registros_sup)
 
-    # Agentes (tipo registro vacío)
+    # AGENTES
     df_agents = resumen_ag.copy()
     df_agents.insert(1, "Tipo Registro", "")
 
-    # Unión final
+    # UNION ORDENADA
     final = pd.concat([df_sup, df_agents], ignore_index=True)
 
-    # Orden final
     order = [
         "Supervisor","Tipo Registro","Nombre","Primer Apellido","Segundo Apellido",
         "Email Cabify","Tipo contrato","Ingreso","Correo Supervisor",
@@ -464,7 +468,7 @@ def procesar_reportes(df_ventas, df_performance, df_auditorias, agentes_df, d_fr
 
     diario = build_daily([ventas, perf, auds], agentes_df)
     semanal = build_weekly(diario)
-    resumen = build_summary(diario)   # <— YA INCLUYE SUPERVISORES + AGENTES
+    resumen = build_summary(diario)  # unificado supervisores + agentes
 
     return {
         "diario": diario,
