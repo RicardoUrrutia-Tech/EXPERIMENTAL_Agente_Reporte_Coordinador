@@ -3,10 +3,65 @@ import pandas as pd
 from io import BytesIO
 from processor import procesar_reportes
 
-st.set_page_config(page_title="CMI Aeropuerto - Reportes", layout="wide")
 
 # ---------------------------------------------------------
-# Función para descargar Excel con 3 hojas
+# CONFIGURACIÓN GENERAL
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="CMI Aeropuerto - Reportes",
+    layout="wide"
+)
+
+st.title("📊 Consolidado CMI Aeropuerto - Reportes")
+
+
+# ---------------------------------------------------------
+# FUNCIÓN PARA CARGAR ARCHIVOS (VERSIÓN QUE SÍ FUNCIONABA)
+# ---------------------------------------------------------
+def cargar_archivo(f):
+    if f is None:
+        return None
+
+    try:
+        nombre = f.name.lower()
+
+        # Excel
+        if nombre.endswith(".xlsx") or nombre.endswith(".xls"):
+            return pd.read_excel(f)
+
+        # CSV — intentar coma primero
+        if nombre.endswith(".csv"):
+            f.seek(0)
+            try:
+                return pd.read_csv(f, sep=",", encoding="utf-8-sig")
+            except:
+                pass
+
+            # CSV — intentar punto y coma
+            f.seek(0)
+            try:
+                return pd.read_csv(f, sep=";", encoding="utf-8-sig")
+            except:
+                pass
+
+            # Fallback: autodetección
+            f.seek(0)
+            try:
+                return pd.read_csv(f, sep=None, engine="python", encoding="utf-8-sig")
+            except Exception as e:
+                st.error(f"No se pudo leer el archivo CSV: {e}")
+                return None
+
+        st.error("Formato no soportado (usa CSV o XLSX).")
+        return None
+
+    except Exception as e:
+        st.error(f"Error cargando archivo {f.name}: {e}")
+        return None
+
+
+# ---------------------------------------------------------
+# FUNCIÓN PARA DESCARGAR EXCEL CON 3 HOJAS
 # ---------------------------------------------------------
 def generar_excel(resultados):
     output = BytesIO()
@@ -16,35 +71,25 @@ def generar_excel(resultados):
         resultados["resumen"].to_excel(writer, sheet_name="Resumen", index=False)
     return output.getvalue()
 
-# ---------------------------------------------------------
-# Título
-# ---------------------------------------------------------
-st.title("📊 Consolidado CMI Aeropuerto - Reportes")
-
-st.markdown("""
-Carga los archivos de **ventas**, **performance**, **auditorías** y **agentes**, 
-junto con el rango de fechas.  
-El sistema generará:
-- Reporte **Diario**
-- Reporte **Semanal**
-- Reporte **Resumen (Supervisores → Agentes)**
-""")
 
 # ---------------------------------------------------------
-# Entrada de fechas
+# ENTRADA DE FECHAS
 # ---------------------------------------------------------
+st.header("📅 Seleccionar rango de fechas")
+
 col1, col2 = st.columns(2)
 with col1:
-    fecha_inicio = st.date_input("📅 Fecha inicio")
+    fecha_inicio = st.date_input("Fecha inicio")
 with col2:
-    fecha_fin = st.date_input("📅 Fecha fin")
+    fecha_fin = st.date_input("Fecha término")
 
 if fecha_inicio > fecha_fin:
-    st.error("La fecha de inicio no puede ser mayor que la fecha de fin.")
+    st.error("⚠️ La fecha de inicio no puede ser mayor que la de término.")
     st.stop()
 
+
 # ---------------------------------------------------------
-# Carga de archivos
+# CARGA DE ARCHIVOS
 # ---------------------------------------------------------
 st.header("📂 Cargar archivos")
 
@@ -53,33 +98,21 @@ performance_file = st.file_uploader("Performance (CSV o Excel)", type=["csv", "x
 auditorias_file  = st.file_uploader("Auditorías (CSV o Excel)", type=["csv", "xlsx"])
 agentes_file     = st.file_uploader("Agentes (CSV o Excel)", type=["csv", "xlsx"])
 
-def cargar_archivo(f):
-    if f is None:
-        return None
-    try:
-        if f.name.endswith(".csv"):
-            return pd.read_csv(f, encoding="utf-8-sig")
-        else:
-            return pd.read_excel(f)
-    except Exception as e:
-        st.error(f"Error cargando archivo {f.name}: {e}")
-        return None
-
-# Cargar los archivos
 df_ventas      = cargar_archivo(ventas_file)
 df_performance = cargar_archivo(performance_file)
 df_auditorias  = cargar_archivo(auditorias_file)
 df_agentes     = cargar_archivo(agentes_file)
 
-# ---------------------------------------------------------
-# Procesamiento
-# ---------------------------------------------------------
-st.header("⚙️ Procesar datos")
 
-if st.button("Generar Reportes"):
+# ---------------------------------------------------------
+# BOTÓN PARA PROCESAR
+# ---------------------------------------------------------
+st.header("⚙️ Generar Reportes")
+
+if st.button("Procesar"):
 
     if df_ventas is None or df_performance is None or df_auditorias is None or df_agentes is None:
-        st.error("⚠️ Debes cargar TODOS los archivos antes de procesar.")
+        st.error("⚠️ Debes cargar todos los archivos para continuar.")
         st.stop()
 
     try:
@@ -91,7 +124,7 @@ if st.button("Generar Reportes"):
             fecha_inicio,
             fecha_fin
         )
-        
+
         st.success("✅ Reportes generados correctamente.")
 
         # Mostrar tablas
@@ -101,19 +134,18 @@ if st.button("Generar Reportes"):
         st.subheader("🗓️ Reporte Semanal")
         st.dataframe(resultados["semanal"], use_container_width=True)
 
-        st.subheader("📊 Resumen (Supervisor → Agentes)")
+        st.subheader("📊 Resumen por Supervisor")
         st.dataframe(resultados["resumen"], use_container_width=True)
 
-        # Botón de descarga
-        excel_data = generar_excel(resultados)
+        # Descargar Excel
+        excel_bytes = generar_excel(resultados)
+
         st.download_button(
-            label="⬇️ Descargar Excel con 3 Hojas",
-            data=excel_data,
+            label="⬇️ Descargar Excel (3 hojas)",
+            data=excel_bytes,
             file_name="CMI_Aeropuerto_Reporte.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
     except Exception as e:
-        st.error(f"❌ Error al procesar datos: {e}")
-
-
+        st.error(f"❌ Error al procesar: {e}")
