@@ -110,7 +110,6 @@ def process_ventas(df, d_from, d_to):
 
     df["agente"] = df["ds_agent_email"].astype(str).str.lower().str.strip()
 
-    # limpiar precios
     if "qt_price_local" in df.columns:
         df["qt_price_local"] = (
             df["qt_price_local"]
@@ -143,7 +142,6 @@ def process_ventas(df, d_from, d_to):
     return out if not out.empty else empty_df(base_cols)
 
 
-
 # =========================================================
 #   PERFORMANCE — Fecha de Referencia (MM/DD/YYYY)
 # =========================================================
@@ -165,7 +163,6 @@ def process_performance(df, d_from, d_to):
     if "Fecha de Referencia" not in df.columns or "Assignee Email" not in df.columns:
         return empty_df(base_cols)
 
-    # formato MM/DD/YYYY
     df["fecha"] = pd.to_datetime(df["Fecha de Referencia"], errors="coerce").dt.date
     df = df[df["fecha"].notna()]
     df = df[(df["fecha"] >= d_from) & (df["fecha"] <= d_to)]
@@ -209,8 +206,6 @@ def process_performance(df, d_from, d_to):
     })
 
     return agg if not agg.empty else empty_df(base_cols)
-
-
 
 # =========================================================
 #   AUDITORÍAS — Date Time (DD-MM-YYYY / DD/MM/YYYY)
@@ -302,7 +297,6 @@ def build_daily(df_list, agentes_df):
 
     merged = merge_agentes(merged, agentes_df)
 
-    # columnas necesarias
     for c in [
         "Q_Encuestas","CSAT","NPS","FIRT","%FIRT","FURT","%FURT",
         "Q_Auditorias","Nota_Auditorias",
@@ -326,7 +320,6 @@ def build_daily(df_list, agentes_df):
 
     merged = merged.sort_values(["fecha","Email Cabify"], na_position="first")
 
-    # ordenar columnas finales
     final_cols = [
         "fecha",
         "Nombre","Primer Apellido","Segundo Apellido","Email Cabify",
@@ -342,7 +335,7 @@ def build_daily(df_list, agentes_df):
 
 
 # =========================================================
-#   SEMANAL (Misma estructura que diario + columna Semana)
+#   SEMANAL
 # =========================================================
 
 def build_weekly(df_daily):
@@ -384,14 +377,12 @@ def build_weekly(df_daily):
 
     weekly = df.groupby(["Semana","Email Cabify"], as_index=False).agg(agg)
 
-    # unir con datos personales
     personal_cols = [
         "Email Cabify","Nombre","Primer Apellido","Segundo Apellido",
         "Supervisor","Correo Supervisor","Tipo contrato","Ingreso"
     ]
     weekly = weekly.merge(df[personal_cols].drop_duplicates(), on="Email Cabify", how="left")
 
-    # reordenar columnas
     cols = [
         "Semana",
         "Nombre","Primer Apellido","Segundo Apellido","Email Cabify",
@@ -403,9 +394,6 @@ def build_weekly(df_daily):
     ]
 
     return weekly[cols]
-
-
-
 # =========================================================
 #   RESUMEN — Supervisor → agentes
 # =========================================================
@@ -442,7 +430,6 @@ def build_summary(df_daily):
         df[info_cols].drop_duplicates(), on="Email Cabify", how="left"
     )
 
-    # Función ponderada
     def w(vals, weights):
         vals = pd.to_numeric(vals, errors="coerce")
         weights = pd.to_numeric(weights, errors="coerce")
@@ -466,11 +453,9 @@ def build_summary(df_daily):
 
     resumen_ag = resumen_ag.merge(pd.DataFrame(registros), on="Email Cabify", how="left")
 
-    # Redondeo
     for c in ["NPS","CSAT","FIRT","%FIRT","FURT","%FURT","Nota_Auditorias"]:
         resumen_ag[c] = pd.to_numeric(resumen_ag[c], errors="coerce").round(2)
 
-    # --- Resumen por supervisor ---
     supervisors = resumen_ag["Supervisor"].dropna().unique().tolist()
     registros_sup = []
 
