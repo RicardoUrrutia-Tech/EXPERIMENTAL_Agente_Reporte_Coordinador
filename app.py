@@ -61,15 +61,47 @@ def cargar_archivo(f):
 
 
 # ---------------------------------------------------------
-# FUNCIÓN PARA DESCARGAR EXCEL CON 3 HOJAS
+# FUNCIÓN PARA GENERAR EXCEL CON FORMATO (2 DECIMALES)
 # ---------------------------------------------------------
 def generar_excel(resultados):
+
     output = BytesIO()
     with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        # Exportar hojas
         resultados["diario"].to_excel(writer, sheet_name="Diario", index=False)
         resultados["semanal"].to_excel(writer, sheet_name="Semanal", index=False)
         resultados["resumen"].to_excel(writer, sheet_name="Resumen", index=False)
+
+        workbook = writer.book
+
+        fmt_decimal = workbook.add_format({"num_format": "0.00"})  # 2 decimales
+        fmt_int = workbook.add_format({"num_format": "0"})         # enteros
+
+        columnas_decimales = [
+            "CSAT", "NPS", "FIRT", "%FIRT",
+            "FURT", "%FURT", "Nota_Auditorias"
+        ]
+
+        for sheet_name in ["Diario", "Semanal", "Resumen"]:
+            ws = writer.sheets[sheet_name]
+            df = resultados[sheet_name.lower()]
+
+            for col_idx, col_name in enumerate(df.columns):
+
+                # Indicadores con 2 decimales
+                if col_name in columnas_decimales:
+                    ws.set_column(col_idx, col_idx, 12, fmt_decimal)
+
+                # Ventas y contadores como enteros
+                elif col_name.startswith("Q_") or col_name.startswith("Ventas_"):
+                    ws.set_column(col_idx, col_idx, 10, fmt_int)
+
+                # Otras columnas sin formato especial
+                else:
+                    ws.set_column(col_idx, col_idx, 16)
+
     return output.getvalue()
+
 
 
 # ---------------------------------------------------------
@@ -149,3 +181,4 @@ if st.button("Procesar"):
 
     except Exception as e:
         st.error(f"❌ Error al procesar: {e}")
+
