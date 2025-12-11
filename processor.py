@@ -52,10 +52,6 @@ def to_date(x):
     return None
 
 
-# =========================================================
-#   AUXILIARES
-# =========================================================
-
 def normalize_headers(df):
     df.columns = (
         df.columns.astype(str)
@@ -142,6 +138,7 @@ def process_ventas(df, d_from, d_to):
     return out if not out.empty else empty_df(base_cols)
 
 
+
 # =========================================================
 #   PERFORMANCE — Fecha de Referencia (MM/DD/YYYY)
 # =========================================================
@@ -177,7 +174,8 @@ def process_performance(df, d_from, d_to):
     )
 
     df["Q_Tickets"] = 1
-    df["Q_Tickets_Resueltos"] = df["Status"].astype(str).str.lower().str.strip().eq("solved").astype(int)
+    status = df["Status"].astype(str).str.lower().str.strip()
+    df["Q_Tickets_Resueltos"] = np.where(status.isin(["solved", "closed"]), 1, 0)
 
     df["Q_Reopen"] = pd.to_numeric(df.get("Reopen", 0), errors="coerce").fillna(0)
 
@@ -220,29 +218,43 @@ def process_auditorias(df, d_from, d_to):
 
     df = normalize_headers(df.copy())
 
-    if "Date Time" not in df.columns or "Audited Agent" not in df.columns:
+    fecha_col = None
+    for c in ["Date Time Reference","Date Time","ï»¿Date Time"]:
+        if c in df.columns:
+            fecha_col = c
+            break
+
+    if fecha_col is None or "Audited Agent" not in df.columns:
         return empty_df(base_cols)
 
-    df["fecha"] = df["Date Time"].apply(to_date)
+    df["fecha"] = df[fecha_col].apply(to_date)
     df = df[df["fecha"].notna()]
     df = df[(df["fecha"] >= d_from) & (df["fecha"] <= d_to)]
     if df.empty:
         return empty_df(base_cols)
 
-    df = df[df["Audited Agent"].astype(str).str.contains("@")]
-    if df.empty:
+    df["agente"] = df["Audited Agent"].astype(str).str.lower().str.strip()
+
+    if "Total Audit Score" not in df.columns:
         return empty_df(base_cols)
 
-    df["agente"] = df["Audited Agent"].astype(str).str.lower().str.strip()
-    df["Q_Auditorias"] = 1
-    df["Nota_Auditorias"] = pd.to_numeric(df.get("Total Audit Score", 0), errors="coerce").fillna(0)
+    score_raw = (
+        df["Total Audit Score"]
+        .astype(str)
+        .str.replace(",", ".", regex=False)
+        .str.replace("%", "", regex=False)
+        .str.strip()
+    )
 
-    out = df.groupby(["agente","fecha"], as_index=False).agg({
+    df["Nota_Auditorias"] = pd.to_numeric(score_raw, errors="coerce").fillna(0)
+    df["Q_Auditorias"] = 1
+
+    agg = df.groupby(["agente","fecha"], as_index=False).agg({
         "Q_Auditorias":"sum",
         "Nota_Auditorias":"mean"
     })
 
-    return out if not out.empty else empty_df(base_cols)
+    return agg if not agg.empty else empty_df(base_cols)
 
 
 
@@ -394,6 +406,7 @@ def build_weekly(df_daily):
     ]
 
     return weekly[cols]
+
 # =========================================================
 #   RESUMEN — Supervisor → agentes
 # =========================================================
@@ -529,3 +542,4 @@ def procesar_reportes(df_ventas, df_perf, df_aud, agentes_df, d_from, d_to):
         "semanal": semanal,
         "resumen": resumen
     }
+
